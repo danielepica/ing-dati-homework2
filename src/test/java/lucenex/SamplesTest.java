@@ -95,7 +95,7 @@ public class SamplesTest {
         Query query = new TermQuery(new Term("titolo", "Ingegneria"));
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null);
+            indexDocs(directory, new SimpleTextCodec());
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 runQuery(searcher, query);
@@ -384,7 +384,7 @@ public class SamplesTest {
         System.out.println(w);
     }
 
-    public Map<String, String> readAllFileTxt(File folder) throws Exception {
+    private Map<String, String> readAllFileTxt(File folder) throws Exception {
         Map<String, String> allFiles = new HashMap<>();
         for (File file : folder.listFiles()) {
             String fileName = file.getName();
@@ -442,7 +442,7 @@ public class SamplesTest {
         Query query = new MatchAllDocsQuery();
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null, new File("file/"));
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 runQuery(searcher, query);
@@ -452,5 +452,66 @@ public class SamplesTest {
 
         }
     }
+
+    @Test
+    public void testIndexingAndSearchPQHomework() throws Exception {
+        Path path = Paths.get("target/idx4");
+
+        PhraseQuery query = new PhraseQuery.Builder()
+                .add(new Term("titolo", "machine"))
+                .add(new Term("titolo", "learning"))
+                .build();
+
+
+
+        try (Directory directory = FSDirectory.open(path)) {
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
+            try (IndexReader reader = DirectoryReader.open(directory)) {
+                IndexSearcher searcher = new IndexSearcher(reader);
+                runQuery(searcher, query);
+            } finally {
+                directory.close();
+            }
+
+        }
+    }
+
+    public static void main(String args[]) throws Exception {
+        SamplesTest utilsMethod = new SamplesTest();
+        Path path = Paths.get("target/idx5");
+        System.out.println("Inserisci prima la parola-chiave tra [titolo, contenuto] + spazio, seguito da una serie di termini che vuoi includere nella tua query.\n" +
+                "Esempio: nome intelligenza artificiale \n" +
+                " (digita 'esc' per uscire):");
+        Directory directory = FSDirectory.open(path);
+        utilsMethod.indexDocs(directory, new SimpleTextCodec(), new File("file/"));
+
+        IndexReader reader = DirectoryReader.open(directory);
+        IndexSearcher searcher = new IndexSearcher(reader);
+
+        while (true) {
+            Scanner scanner = new Scanner(System.in);
+            String stringa = scanner.nextLine();
+
+            if (stringa.equals("esc")) break;
+
+            String[] fieldAndQuery = stringa.split(" ", 2);
+            if (fieldAndQuery.length > 1) {
+                String field = fieldAndQuery[0];
+                String queryInput = fieldAndQuery[1]; //capire se aggiungere lower case perchè il contenuto è salvato tutto minuscolo mentre i titoli no
+                String[] terms = queryInput.split(" ");
+                //controllare se la lunghezza dell'array è > 1 altrimeni Index 1 out of bounds for length
+                PhraseQuery.Builder builder = new PhraseQuery.Builder();
+                for (int i = 0; i < terms.length; i++) {
+                    builder.add(new Term(field, terms[i]));
+                }
+                PhraseQuery query = builder.build();
+                utilsMethod.runQuery(searcher, query);
+
+            } else System.out.println("L'input inserito non è valido.");
+
+        }
+        directory.close();
+    }
+
 
 }
