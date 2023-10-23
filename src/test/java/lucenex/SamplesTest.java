@@ -347,7 +347,6 @@ public class SamplesTest {
         CharArraySet stopWords = new CharArraySet(Arrays.asList("in", "dei", "di", "a", "da", "con", "su", "per", "tra", "fra"), true);
         Map<String, Analyzer> perFieldAnalyzers = new HashMap<>();
         //qui definisco quali analyzer utilizzare per i vari field
-
         perFieldAnalyzers.put("contenuto", new StandardAnalyzer(stopWords));
         perFieldAnalyzers.put("titolo", new WhitespaceAnalyzer());
 
@@ -411,11 +410,37 @@ public class SamplesTest {
             }
 
         }
-        /*for(String chiave : allFiles.keySet()){
-            System.out.println(chiave);
-            System.out.println(allFiles.get(chiave));
-        }*/
         return allFiles;
+    }
+
+    private String readRandomFileTxt(File folder) throws Exception {
+        // Ottieni una lista di file e mescolala
+        File[] files = folder.listFiles();
+        Collections.shuffle(Arrays.asList(files));
+
+        // Crea uno stream dalla lista mescolata e trova qualsiasi file
+        Optional<File> anyFile = Arrays.stream(files).findAny();
+        if (anyFile.isPresent()) {
+            File file = anyFile.get();
+            String fileName = file.getName();
+            // Extract the extension from the file name
+            int index = fileName.lastIndexOf('.');
+            if (index > 0) {
+                String name = fileName.substring(0, index);
+                String extension = fileName.substring(index + 1);
+                if (extension.equals("txt")) {
+                    BufferedReader br = new BufferedReader(new FileReader(file));
+                    String st;
+                    StringBuilder str = new StringBuilder();
+                    while ((st = br.readLine()) != null) {
+                        str.append(st);
+                    }
+                    return str.toString();
+                }
+            }
+
+        }
+        return null;
     }
 
     @Test
@@ -484,9 +509,10 @@ public class SamplesTest {
     public static void main(String args[]) throws Exception {
         SamplesTest utilsMethod = new SamplesTest();
         Path path = Paths.get("target/idx5");
-        System.out.println("Inserisci prima la parola-chiave tra [titolo, contenuto] + spazio, seguito da una serie di termini che vuoi includere nella tua query.\n" +
+        System.out.println("Inserisci prima la parola-chiave tra [titolo, contenuto] + spazio, seguito da una serie di termini che vuoi includere nella tua query per trovare il documento che contiene quei termini.\n" +
                 "Esempio: nome intelligenza artificiale \n" +
-                " (digita 'esc' per uscire):");
+                "Inserisci 'chat casuale' per avere un riassunto fatto da un LLM di uno dei documenti presenti nella cartella\n" +
+                "Digita 'esc' per uscire");
         Directory directory = FSDirectory.open(path);
         utilsMethod.indexDocs(directory, new SimpleTextCodec(), new File("file/"));
 
@@ -504,19 +530,24 @@ public class SamplesTest {
             if (fieldAndQuery.length > 1) {
                 String field = fieldAndQuery[0];
                 String queryInput = fieldAndQuery[1];
-                String[] singleInput = queryInput.split(" ");
-                PhraseQuery.Builder phraseQueryBuilder = new PhraseQuery.Builder();
 
-                for (int i = 0; i < singleInput.length; i++) {
-                    if (field.equals("contenuto")) {
-                        singleInput[i] = singleInput[i].toLowerCase();
+                if ("chat".equals(field)) {
+                    System.out.println(LLMAPI.chatLLM(utilsMethod.readRandomFileTxt(new File("file/"))));
+                } else {
+                    String[] singleInput = queryInput.split(" ");
+                    PhraseQuery.Builder phraseQueryBuilder = new PhraseQuery.Builder();
+
+                    for (int i = 0; i < singleInput.length; i++) {
+                        if (field.equals("contenuto")) {
+                            singleInput[i] = singleInput[i].toLowerCase();
+                        }
+                        phraseQueryBuilder.add(new Term(field, singleInput[i]));
                     }
-                    phraseQueryBuilder.add(new Term(field, singleInput[i]));
-                }
-                Query phraseQuery = phraseQueryBuilder.build();
-                utilsMethod.runQuery(searcher, phraseQuery);
+                    Query phraseQuery = phraseQueryBuilder.build();
+                    utilsMethod.runQuery(searcher, phraseQuery);
 
-            } else System.out.println("L'input inserito non è valido.");
+                }
+            }else System.out.println("L'input inserito non è valido.");
 
         }
         directory.close();

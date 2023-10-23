@@ -3,26 +3,26 @@
     number of documents 2
     uses compound file true
     diagnostics 8
-      key os
-      value Mac OS X
-      key java.vendor
-      value Amazon.com Inc.
-      key java.runtime.version
-      value 17.0.6+10-LTS
-      key timestamp
-      value 1698081618547
-      key source
-      value flush
       key lucene.version
       value 9.8.0
-      key os.version
-      value 12.6.1
+      key source
+      value flush
+      key timestamp
+      value 1698093862086
+      key java.runtime.version
+      value 17.0.6+10-LTS
+      key java.vendor
+      value Amazon.com Inc.
+      key os
+      value Mac OS X
       key os.arch
       value x86_64
+      key os.version
+      value 12.6.1
     attributes 0
     files 2
       file _0.si
       file _0.scf
-    id kóBf£Ô…vJN¬R»Ø:◊
+    id ~Åﬂ·|pÇ<∂É~µæ∑
     sort 0
-checksum 00000000001551840734
+checksum 00000000000058354474
