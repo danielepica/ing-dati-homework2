@@ -9,8 +9,13 @@ import java.util.*;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.core.LowerCaseFilterFactory;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
+import org.apache.lucene.analysis.core.WhitespaceTokenizerFactory;
+import org.apache.lucene.analysis.custom.CustomAnalyzer;
+import org.apache.lucene.analysis.it.ItalianAnalyzer;
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper;
+import org.apache.lucene.analysis.miscellaneous.WordDelimiterGraphFilterFactory;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.simpletext.SimpleTextCodec;
@@ -339,9 +344,10 @@ public class SamplesTest {
     private void indexDocs(Directory directory, Codec codec, File file) throws Exception {
         Analyzer defaultAnalyzer = new StandardAnalyzer();
         //Creo una lista di stopword, CharArraySet propria di Lucene
-        CharArraySet stopWords = new CharArraySet(Arrays.asList("in", "dei", "di"), true);
+        CharArraySet stopWords = new CharArraySet(Arrays.asList("in", "dei", "di", "a", "da", "con", "su", "per", "tra", "fra"), true);
         Map<String, Analyzer> perFieldAnalyzers = new HashMap<>();
         //qui definisco quali analyzer utilizzare per i vari field
+
         perFieldAnalyzers.put("contenuto", new StandardAnalyzer(stopWords));
         perFieldAnalyzers.put("titolo", new WhitespaceAnalyzer());
 
@@ -463,7 +469,6 @@ public class SamplesTest {
                 .build();
 
 
-
         try (Directory directory = FSDirectory.open(path)) {
             indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
@@ -495,22 +500,50 @@ public class SamplesTest {
             if (stringa.equals("esc")) break;
 
             String[] fieldAndQuery = stringa.split(" ", 2);
+            //controllare se la lunghezza dell'array è > 1 altrimeni Index 1 out of bounds for length
             if (fieldAndQuery.length > 1) {
                 String field = fieldAndQuery[0];
-                String queryInput = fieldAndQuery[1]; //capire se aggiungere lower case perchè il contenuto è salvato tutto minuscolo mentre i titoli no
-                String[] terms = queryInput.split(" ");
-                //controllare se la lunghezza dell'array è > 1 altrimeni Index 1 out of bounds for length
-                PhraseQuery.Builder builder = new PhraseQuery.Builder();
-                for (int i = 0; i < terms.length; i++) {
-                    builder.add(new Term(field, terms[i]));
+                String queryInput = fieldAndQuery[1];
+                String[] singleInput = queryInput.split(" ");
+                PhraseQuery.Builder phraseQueryBuilder = new PhraseQuery.Builder();
+
+                for (int i = 0; i < singleInput.length; i++) {
+                    if (field.equals("contenuto")) {
+                        singleInput[i] = singleInput[i].toLowerCase();
+                    }
+                    phraseQueryBuilder.add(new Term(field, singleInput[i]));
                 }
-                PhraseQuery query = builder.build();
-                utilsMethod.runQuery(searcher, query);
+                Query phraseQuery = phraseQueryBuilder.build();
+                utilsMethod.runQuery(searcher, phraseQuery);
 
             } else System.out.println("L'input inserito non è valido.");
 
         }
         directory.close();
+    }
+
+    @Test
+    public void testIndexingAndSearchQPHomework() throws Exception {
+        Path path = Paths.get("target/idx1");
+
+
+        QueryParser parserContenuto = new QueryParser("contenuto", new StandardAnalyzer());
+        //Se voglio che le parole devono esserci per forza devo scrivere + prima di ogni parola
+        Query query = parserContenuto.parse("+machine +learnxing,");
+        QueryParser parserTitolo = new QueryParser("titolo", new StandardAnalyzer());
+        Query query2 = parserContenuto.parse("ChatGPT,");
+
+
+        try (Directory directory = FSDirectory.open(path)) {
+            indexDocs(directory, null, new File("file/"));
+            try (IndexReader reader = DirectoryReader.open(directory)) {
+                IndexSearcher searcher = new IndexSearcher(reader);
+                runQuery(searcher, query);
+            } finally {
+                directory.close();
+            }
+
+        }
     }
 
 
