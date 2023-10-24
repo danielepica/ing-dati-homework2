@@ -5,6 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.CharArraySet;
@@ -346,9 +348,10 @@ public class SamplesTest {
         //Creo una lista di stopword, CharArraySet propria di Lucene
         CharArraySet stopWords = new CharArraySet(Arrays.asList("in", "dei", "di", "a", "da", "con", "su", "per", "tra", "fra"), true);
         Map<String, Analyzer> perFieldAnalyzers = new HashMap<>();
+        Analyzer titleAnalyzer = CustomAnalyzer.builder().withTokenizer(WhitespaceTokenizerFactory.class).addTokenFilter(LowerCaseFilterFactory.class).build();
         //qui definisco quali analyzer utilizzare per i vari field
         perFieldAnalyzers.put("contenuto", new StandardAnalyzer(stopWords));
-        perFieldAnalyzers.put("titolo", new WhitespaceAnalyzer());
+        perFieldAnalyzers.put("titolo", titleAnalyzer);
 
         //Il primo viene usato come default se non specifico il campo da interrogare
         Analyzer analyzer = new PerFieldAnalyzerWrapper(defaultAnalyzer, perFieldAnalyzers);
@@ -444,11 +447,6 @@ public class SamplesTest {
     }
 
     @Test
-    public void testReaderFile() throws Exception {
-        Map<String, String> mappa = readAllFileTxt(new File("file/"));
-    }
-
-    @Test
     public void testHomework2() throws Exception {
         Path path = Paths.get("target/idx0");
 
@@ -493,7 +491,6 @@ public class SamplesTest {
                 .add(new Term("titolo", "learning"))
                 .build();
 
-
         try (Directory directory = FSDirectory.open(path)) {
             indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
@@ -520,6 +517,9 @@ public class SamplesTest {
         IndexSearcher searcher = new IndexSearcher(reader);
 
         while (true) {
+            List<TermQuery> termQueriesList = new ArrayList<>();
+            List<String> phraseQueries = new ArrayList<>();
+            List<PhraseQuery> phraseQueryList = new ArrayList<>();
             Scanner scanner = new Scanner(System.in);
             String stringa = scanner.nextLine();
 
@@ -531,23 +531,47 @@ public class SamplesTest {
                 String field = fieldAndQuery[0];
                 String queryInput = fieldAndQuery[1];
 
-                if ("chat".equals(field)) {
+                if ("chat".equals(field) && "casuale".equals(queryInput)) {
                     System.out.println(LLMAPI.chatLLM(utilsMethod.readRandomFileTxt(new File("file/"))));
                 } else {
-                    String[] singleInput = queryInput.split(" ");
-                    PhraseQuery.Builder phraseQueryBuilder = new PhraseQuery.Builder();
+                    //Query phrase?
+                    Pattern pattern = Pattern.compile("\"([^\"]*)\"");
+                    Matcher matcher = pattern.matcher(queryInput);
+
+                    while (matcher.find()) {
+                        String frase = matcher.group(1);
+                        phraseQueries.add(frase);
+                    }
+                    for (String phraseQuery : phraseQueries) {
+                        PhraseQuery.Builder phraseQueryBuilder = new PhraseQuery.Builder();
+                        for (String valore : phraseQuery.split(" ")) {
+                            phraseQueryBuilder.add(new Term(field, valore.toLowerCase()));
+                        }
+                        phraseQueryList.add(phraseQueryBuilder.build());
+                    }
+
+                    //Term query
+                    String inputSenzaDobleDot = queryInput.replaceAll("\"([^\"]*)\"", "");
+                    String[] singleInput = inputSenzaDobleDot.split("\\s+");
 
                     for (int i = 0; i < singleInput.length; i++) {
-                        if (field.equals("contenuto")) {
-                            singleInput[i] = singleInput[i].toLowerCase();
+                        if (!singleInput[i].equals("")) {
+                            termQueriesList.add(new TermQuery(new Term(field, singleInput[i].toLowerCase())));
                         }
-                        phraseQueryBuilder.add(new Term(field, singleInput[i]));
                     }
-                    Query phraseQuery = phraseQueryBuilder.build();
-                    utilsMethod.runQuery(searcher, phraseQuery);
+                    BooleanQuery.Builder query = new BooleanQuery.Builder();
+
+                    for (PhraseQuery phraseQuery : phraseQueryList) {
+                        query.add(new BooleanClause(phraseQuery, BooleanClause.Occur.MUST));
+                    }
+                    for (TermQuery termQuery : termQueriesList) {
+                        query.add(new BooleanClause(termQuery, BooleanClause.Occur.MUST));
+                    }
+                    BooleanQuery booleanQuery = query.build();
+                    utilsMethod.runQuery(searcher, booleanQuery);
 
                 }
-            }else System.out.println("L'input inserito non è valido.");
+            } else System.out.println("L'input inserito non è valido. Riprova!");
 
         }
         directory.close();
@@ -560,9 +584,7 @@ public class SamplesTest {
 
         QueryParser parserContenuto = new QueryParser("contenuto", new StandardAnalyzer());
         //Se voglio che le parole devono esserci per forza devo scrivere + prima di ogni parola
-        Query query = parserContenuto.parse("+machine +learnxing,");
-        QueryParser parserTitolo = new QueryParser("titolo", new StandardAnalyzer());
-        Query query2 = parserContenuto.parse("ChatGPT,");
+        Query query = parserContenuto.parse("+machine +learning,");
 
 
         try (Directory directory = FSDirectory.open(path)) {

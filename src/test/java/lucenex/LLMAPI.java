@@ -28,7 +28,7 @@ public class LLMAPI {
     }
 
     public static String chatLLM(String message) {
-        String messageError = "Ops, qualcosa non è andata nel verso giusto. Riprova!";
+        String messageError = "I server potrebbero essere occupati. Riprova tra qualche secondo!";
         String url = "https://api-inference.huggingface.co/models/it5/it5-base-news-summarization";
         String apiKey = "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"; // API key goes here
         StringBuilder response = new StringBuilder();
