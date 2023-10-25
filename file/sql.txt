@@ -1,0 +1,10 @@
+SQL, acronimo di Structured Query Language, è un linguaggio di programmazione utilizzato per gestire e manipolare database relazionali. Creato negli anni '70, SQL è diventato uno standard industriale ed è fondamentale per l'interazione con i database in una vasta gamma di applicazioni.
+Il cuore di SQL consiste nelle query, che sono istruzioni scritte per recuperare, aggiornare o manipolare dati all'interno di un database. Queste query possono essere divise in diverse categorie, tra cui le seguenti:
+Query di Selezione (SELECT): Le query di selezione sono forse la parte più comune di SQL. Consentono di recuperare dati specifici da una o più tabelle all'interno di un database. Ad esempio, una query SELECT potrebbe essere utilizzata per estrarre tutti i nomi degli utenti da una tabella "Utenti".
+Query di Inserimento (INSERT): Le query di inserimento vengono utilizzate per aggiungere nuovi dati a una tabella.
+Query di Aggiornamento (UPDATE): Le query di aggiornamento permettono di modificare i dati esistenti in una tabella.
+Query di Eliminazione (DELETE): Le query di eliminazione consentono di rimuovere dati da una tabella.
+SQL non è solo limitato a queste operazioni di base. Supporta anche concetti avanzati come le join, che permettono di combinare dati da più tabelle, e le transazioni, che assicurano l'integrità e la coerenza dei dati.
+Un concetto chiave in SQL è la normalizzazione del database, che consiste nell'organizzare i dati in modo efficiente, riducendo la ridondanza e garantendo che le informazioni siano memorizzate in tabelle correlate in modo appropriato. Ciò aiuta a garantire la coerenza e la facilità di gestione del database nel tempo.
+Oltre alle operazioni CRUD (Create, Read, Update, Delete), SQL supporta anche funzioni aggregate come COUNT, SUM, AVG e molte altre, che consentono di eseguire calcoli complessi sui dati.
+Infine, è importante sottolineare che SQL è utilizzato in una vasta gamma di contesti, dallo sviluppo di applicazioni web alla gestione di enormi sistemi aziendali. La sua versatilità e la sua ubiquità lo rendono uno strumento essenziale per chiunque lavori con database relazionali.

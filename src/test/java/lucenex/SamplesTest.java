@@ -11,13 +11,9 @@ import java.util.regex.Pattern;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.core.LowerCaseFilterFactory;
+import org.apache.lucene.analysis.core.SimpleAnalyzer;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
-import org.apache.lucene.analysis.core.WhitespaceTokenizerFactory;
-import org.apache.lucene.analysis.custom.CustomAnalyzer;
-import org.apache.lucene.analysis.it.ItalianAnalyzer;
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper;
-import org.apache.lucene.analysis.miscellaneous.WordDelimiterGraphFilterFactory;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.simpletext.SimpleTextCodec;
@@ -57,12 +53,93 @@ import org.junit.Test;
  */
 public class SamplesTest {
 
+
+    static CharArraySet stopWords = new CharArraySet(Arrays.asList("in", "dei", "di", "a", "da", "con", "su", "per", "tra", "fra"), true);
+
+
+    public static void main(String args[]) throws Exception {
+        SamplesTest utilsMethod = new SamplesTest();
+        Path path = Paths.get("target/idx5");
+        System.out.println("Inserisci prima la parola-chiave tra [titolo, contenuto] + spazio, seguito da una serie di termini che vuoi includere nella tua query per trovare il documento che contiene quei termini.\n" +
+                "Esempio: titolo intelligenza \n" +
+                "Esempio: titolo \"intelligenza artificiale\" \n" +
+                "Inserisci 'chat casuale' per avere un riassunto fatto da un LLM di uno dei documenti presenti nella cartella\n" +
+                "Digita 'esc' per uscire");
+        Directory directory = FSDirectory.open(path);
+        utilsMethod.indexDocs(directory, new SimpleTextCodec(), new File("file/"));
+
+        IndexReader reader = DirectoryReader.open(directory);
+        IndexSearcher searcher = new IndexSearcher(reader);
+
+        while (true) {
+            List<TermQuery> termQueriesList = new ArrayList<>();
+            List<String> phraseQueries = new ArrayList<>();
+            List<PhraseQuery> phraseQueryList = new ArrayList<>();
+            Scanner scanner = new Scanner(System.in);
+            String stringa = scanner.nextLine();
+
+            if (stringa.equals("esc")) break;
+
+            String[] fieldAndQuery = stringa.split(" ", 2);
+            //controllare se la lunghezza dell'array è > 1 altrimeni Index 1 out of bounds for length
+            if (fieldAndQuery.length > 1) {
+                String field = fieldAndQuery[0];
+                String queryInput = fieldAndQuery[1];
+
+                if ("chat".equals(field) && "casuale".equals(queryInput)) {
+                    System.out.println(LLMAPI.chatLLM(utilsMethod.readRandomFileTxt(new File("file/"))));
+                } else {
+                    //Query phrase?
+                    Pattern pattern = Pattern.compile("\"([^\"]*)\"");
+                    Matcher matcher = pattern.matcher(queryInput);
+
+                    while (matcher.find()) {
+                        String frase = matcher.group(1);
+                        phraseQueries.add(frase);
+                    }
+                    for (String phraseQuery : phraseQueries) {
+                        PhraseQuery.Builder phraseQueryBuilder = new PhraseQuery.Builder();
+                        for (String valore : phraseQuery.split(" ")) {
+                            if (!stopWords.contains(valore)) {
+                                phraseQueryBuilder.add(new Term(field, valore.toLowerCase()));
+                            }
+                        }
+                        phraseQueryList.add(phraseQueryBuilder.setSlop(2).build());
+                    }
+
+                    //Term query
+                    String inputSenzaDobleDot = queryInput.replaceAll("\"([^\"]*)\"", "");
+                    String[] singleInput = inputSenzaDobleDot.split("\\s+");
+
+                    for (int i = 0; i < singleInput.length; i++) {
+                        if (!singleInput[i].equals("") && !stopWords.contains(singleInput[i])) {
+                            termQueriesList.add(new TermQuery(new Term(field, singleInput[i].toLowerCase())));
+                        }
+                    }
+                    BooleanQuery.Builder query = new BooleanQuery.Builder();
+
+                    for (PhraseQuery phraseQuery : phraseQueryList) {
+                        query.add(new BooleanClause(phraseQuery, BooleanClause.Occur.MUST));
+                    }
+                    for (TermQuery termQuery : termQueriesList) {
+                        query.add(new BooleanClause(termQuery, BooleanClause.Occur.MUST));
+                    }
+                    BooleanQuery booleanQuery = query.build();
+                    utilsMethod.runQuery(searcher, booleanQuery);
+
+                }
+            } else System.out.println("L'input inserito non è valido. Riprova!");
+
+        }
+        directory.close();
+    }
+
     @Test
     public void testIndexStatistics() throws Exception {
         Path path = Paths.get("target/idx0");
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, new SimpleTextCodec());
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 Collection<String> indexedFields = FieldInfos.getIndexedFields(reader);
@@ -84,7 +161,7 @@ public class SamplesTest {
         Query query = new MatchAllDocsQuery();
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null);
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 runQuery(searcher, query);
@@ -99,28 +176,10 @@ public class SamplesTest {
     public void testIndexingAndSearchTQ() throws Exception {
         Path path = Paths.get("target/idx2");
 
-        Query query = new TermQuery(new Term("titolo", "Ingegneria"));
+        Query query = new TermQuery(new Term("contenuto", "machine"));
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, new SimpleTextCodec());
-            try (IndexReader reader = DirectoryReader.open(directory)) {
-                IndexSearcher searcher = new IndexSearcher(reader);
-                runQuery(searcher, query);
-            } finally {
-                directory.close();
-            }
-
-        }
-    }
-
-    @Test
-    public void testIndexingAndSearchTQOnStringField() throws Exception {
-        Path path = Paths.get("target/idx7");
-
-        Query query = new TermQuery(new Term("data", "12 ottobre 2016"));
-
-        try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null);
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 runQuery(searcher, query);
@@ -136,55 +195,12 @@ public class SamplesTest {
         Path path = Paths.get("target/idx4");
 
         PhraseQuery query = new PhraseQuery.Builder()
-                .add(new Term("contenuto", "data"))
-                .add(new Term("contenuto", "scientist"))
+                .add(new Term("contenuto", "nell'uso"))
+                .add(new Term("contenuto", "chatgpt")).setSlop(1)
                 .build();
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null);
-            try (IndexReader reader = DirectoryReader.open(directory)) {
-                IndexSearcher searcher = new IndexSearcher(reader);
-                runQuery(searcher, query);
-            } finally {
-                directory.close();
-            }
-
-        }
-    }
-
-    @Test
-    public void testIndexingAndSearchPQ2() throws Exception {
-        Path path = Paths.get("target/idx4");
-
-        PhraseQuery query = new PhraseQuery(1, "contenuto", "data", "scientist");
-
-        try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null);
-            try (IndexReader reader = DirectoryReader.open(directory)) {
-                IndexSearcher searcher = new IndexSearcher(reader);
-                runQuery(searcher, query);
-            } finally {
-                directory.close();
-            }
-
-        }
-    }
-
-    @Test
-    public void testIndexingAndSearchPQWithSlop() throws Exception {
-        Path path = Paths.get("target/idx4");
-
-        /*In Lucene, slop è un parametro utilizzato nelle query di tipo PhraseQuery per indicare la massima distanza
-        (o "slop") consentita tra i termini della frase.
-        La distanza è misurata in numero di posizioni (token) all'interno dell'indice.
-        La classe PhraseQuery viene utilizzata per cercare frasi esatte, ovvero frasi in cui i termini compaiono
-        nell'ordine specificato nella query e con una determinata distanza massima tra di essi.
-        Quindi con slop = 2 significa che tra ogni termine ci possono essere fino a 2 parole diverse */
-
-        PhraseQuery query = new PhraseQuery(2, "contenuto", "laurea", "ingegneria");
-
-        try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null);
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 runQuery(searcher, query);
@@ -200,11 +216,11 @@ public class SamplesTest {
         Path path = Paths.get("target/idx5");
 
         PhraseQuery phraseQuery = new PhraseQuery.Builder()
-                .add(new Term("contenuto", "data"))
-                .add(new Term("contenuto", "scientist"))
+                .add(new Term("contenuto", "machine"))
+                .add(new Term("contenuto", "learning"))
                 .build();
 
-        TermQuery termQuery = new TermQuery(new Term("titolo", "Ingegneria"));
+        TermQuery termQuery = new TermQuery(new Term("titolo", "intelligenza"));
 
         BooleanQuery query = new BooleanQuery.Builder()
                 .add(new BooleanClause(termQuery, BooleanClause.Occur.SHOULD))
@@ -212,7 +228,7 @@ public class SamplesTest {
                 .build();
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null);
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 runQuery(searcher, query);
@@ -228,10 +244,10 @@ public class SamplesTest {
         Path path = Paths.get("target/idx1");
 
         QueryParser parser = new QueryParser("contenuto", new WhitespaceAnalyzer());
-        Query query = parser.parse("+ingegneria dei +dati");
+        Query query = parser.parse("+unsupervised +learning");
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null);
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 runQuery(searcher, query);
@@ -248,9 +264,9 @@ public class SamplesTest {
         Directory directory = FSDirectory.open(path);
 
         QueryParser parser = new MultiFieldQueryParser(new String[]{"contenuto", "titolo"}, new WhitespaceAnalyzer());
-        Query query = parser.parse("ingegneria dati data scientist");
+        Query query = parser.parse("+machine +learning");
         try {
-            indexDocs(directory, null);
+            indexDocs(directory, null, new File("file/"));
             Collection<Similarity> similarities = Arrays.asList(new ClassicSimilarity(), new BM25Similarity(2.5f, 0.2f),
                     new LMJelinekMercerSimilarity(0.1f));
             for (Similarity similarity : similarities) {
@@ -274,7 +290,7 @@ public class SamplesTest {
         Query query = new MatchAllDocsQuery();
 
         try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, new SimpleTextCodec());
+            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
             try (IndexReader reader = DirectoryReader.open(directory)) {
                 IndexSearcher searcher = new IndexSearcher(reader);
                 runQuery(searcher, query);
@@ -302,56 +318,13 @@ public class SamplesTest {
         }
     }
 
-    private void indexDocs(Directory directory, Codec codec) throws IOException {
-        Analyzer defaultAnalyzer = new StandardAnalyzer();
-        //Creo una lista di stopword, CharArraySet propria di Lucene
-        CharArraySet stopWords = new CharArraySet(Arrays.asList("in", "dei", "di"), true);
-        Map<String, Analyzer> perFieldAnalyzers = new HashMap<>();
-        //qui definisco quali analyzer utilizzare per i vari field
-        perFieldAnalyzers.put("contenuto", new StandardAnalyzer(stopWords));
-        perFieldAnalyzers.put("titolo", new WhitespaceAnalyzer());
-
-        //Il primo viene usato come default se non specifico il campo da interrogare
-        Analyzer analyzer = new PerFieldAnalyzerWrapper(defaultAnalyzer, perFieldAnalyzers);
-
-        //Definizione Indice di scrittura
-        IndexWriterConfig config = new IndexWriterConfig(analyzer);
-        //Se voglio sapere tutto quello che viene scritto nell'indice uso new SimpleTextCodec()
-        if (codec != null) {
-            config.setCodec(codec);
-        }
-        IndexWriter writer = new IndexWriter(directory, config);
-
-        //Mi serve perchè faccio vari test
-        writer.deleteAll();
-
-        //Ora devo leggere leggere i file contenuti nella mia cartella
-        Document doc1 = new Document();
-        doc1.add(new TextField("titolo", "Come diventare un ingegnere dei dati, Data Engineer?", Field.Store.YES));
-        doc1.add(new TextField("contenuto", "Sembra che oggigiorno tutti vogliano diventare un Data Scientist  ...", Field.Store.YES));
-        doc1.add(new StringField("data", "12 ottobre 2016", Field.Store.YES));
-
-        Document doc2 = new Document();
-        doc2.add(new TextField("titolo", "Curriculum Ingegneria dei Dati - Sezione di Informatica e Automazione", Field.Store.YES));
-        doc2.add(new TextField("contenuto", "Curriculum. Ingegneria dei Dati. Laurea Magistrale in Ingegneria Informatica ...", Field.Store.YES));
-
-        writer.addDocument(doc1);
-        writer.addDocument(doc2);
-        //Salvo tutto
-        writer.commit();
-        //Chiudo tutto
-        writer.close();
-    }
-
     private void indexDocs(Directory directory, Codec codec, File file) throws Exception {
         Analyzer defaultAnalyzer = new StandardAnalyzer();
         //Creo una lista di stopword, CharArraySet propria di Lucene
-        CharArraySet stopWords = new CharArraySet(Arrays.asList("in", "dei", "di", "a", "da", "con", "su", "per", "tra", "fra"), true);
         Map<String, Analyzer> perFieldAnalyzers = new HashMap<>();
-        Analyzer titleAnalyzer = CustomAnalyzer.builder().withTokenizer(WhitespaceTokenizerFactory.class).addTokenFilter(LowerCaseFilterFactory.class).build();
         //qui definisco quali analyzer utilizzare per i vari field
         perFieldAnalyzers.put("contenuto", new StandardAnalyzer(stopWords));
-        perFieldAnalyzers.put("titolo", titleAnalyzer);
+        perFieldAnalyzers.put("titolo", new SimpleAnalyzer());
 
         //Il primo viene usato come default se non specifico il campo da interrogare
         Analyzer analyzer = new PerFieldAnalyzerWrapper(defaultAnalyzer, perFieldAnalyzers);
@@ -370,12 +343,16 @@ public class SamplesTest {
         //Ora devo leggere leggere i file contenuti nella mia cartella
         Map<String, String> mappa = readAllFileTxt(file);
 
+        long startTime = System.currentTimeMillis();
         for (String chiave : mappa.keySet()) {
             Document doc = new Document();
             doc.add(new TextField("titolo", chiave, Field.Store.YES));
             doc.add(new TextField("contenuto", mappa.get(chiave), Field.Store.YES));
             writer.addDocument(doc);
         }
+        long endTime = System.currentTimeMillis();
+        // Stampa il tempo di indicizzazione
+        System.out.println("Tempo di indicizzazione: " + (endTime - startTime) + " millisecondi");
         //Salvo tutto
         writer.commit();
         //Chiudo tutto
@@ -444,159 +421,6 @@ public class SamplesTest {
 
         }
         return null;
-    }
-
-    @Test
-    public void testHomework2() throws Exception {
-        Path path = Paths.get("target/idx0");
-
-        try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
-            try (IndexReader reader = DirectoryReader.open(directory)) {
-                IndexSearcher searcher = new IndexSearcher(reader);
-                Collection<String> indexedFields = FieldInfos.getIndexedFields(reader);
-                for (String field : indexedFields) {
-                    System.out.println(searcher.collectionStatistics(field));
-                }
-            } finally {
-                directory.close();
-            }
-        }
-    }
-
-    @Test
-    public void testIndexingAndSearchAllHomework2() throws Exception {
-        Path path = Paths.get("target/idx3");
-
-        Query query = new MatchAllDocsQuery();
-
-        try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
-            try (IndexReader reader = DirectoryReader.open(directory)) {
-                IndexSearcher searcher = new IndexSearcher(reader);
-                runQuery(searcher, query);
-            } finally {
-                directory.close();
-            }
-
-        }
-    }
-
-    @Test
-    public void testIndexingAndSearchPQHomework() throws Exception {
-        Path path = Paths.get("target/idx4");
-
-        PhraseQuery query = new PhraseQuery.Builder()
-                .add(new Term("titolo", "machine"))
-                .add(new Term("titolo", "learning"))
-                .build();
-
-        try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, new SimpleTextCodec(), new File("file/"));
-            try (IndexReader reader = DirectoryReader.open(directory)) {
-                IndexSearcher searcher = new IndexSearcher(reader);
-                runQuery(searcher, query);
-            } finally {
-                directory.close();
-            }
-
-        }
-    }
-
-    public static void main(String args[]) throws Exception {
-        SamplesTest utilsMethod = new SamplesTest();
-        Path path = Paths.get("target/idx5");
-        System.out.println("Inserisci prima la parola-chiave tra [titolo, contenuto] + spazio, seguito da una serie di termini che vuoi includere nella tua query per trovare il documento che contiene quei termini.\n" +
-                "Esempio: nome intelligenza artificiale \n" +
-                "Inserisci 'chat casuale' per avere un riassunto fatto da un LLM di uno dei documenti presenti nella cartella\n" +
-                "Digita 'esc' per uscire");
-        Directory directory = FSDirectory.open(path);
-        utilsMethod.indexDocs(directory, new SimpleTextCodec(), new File("file/"));
-
-        IndexReader reader = DirectoryReader.open(directory);
-        IndexSearcher searcher = new IndexSearcher(reader);
-
-        while (true) {
-            List<TermQuery> termQueriesList = new ArrayList<>();
-            List<String> phraseQueries = new ArrayList<>();
-            List<PhraseQuery> phraseQueryList = new ArrayList<>();
-            Scanner scanner = new Scanner(System.in);
-            String stringa = scanner.nextLine();
-
-            if (stringa.equals("esc")) break;
-
-            String[] fieldAndQuery = stringa.split(" ", 2);
-            //controllare se la lunghezza dell'array è > 1 altrimeni Index 1 out of bounds for length
-            if (fieldAndQuery.length > 1) {
-                String field = fieldAndQuery[0];
-                String queryInput = fieldAndQuery[1];
-
-                if ("chat".equals(field) && "casuale".equals(queryInput)) {
-                    System.out.println(LLMAPI.chatLLM(utilsMethod.readRandomFileTxt(new File("file/"))));
-                } else {
-                    //Query phrase?
-                    Pattern pattern = Pattern.compile("\"([^\"]*)\"");
-                    Matcher matcher = pattern.matcher(queryInput);
-
-                    while (matcher.find()) {
-                        String frase = matcher.group(1);
-                        phraseQueries.add(frase);
-                    }
-                    for (String phraseQuery : phraseQueries) {
-                        PhraseQuery.Builder phraseQueryBuilder = new PhraseQuery.Builder();
-                        for (String valore : phraseQuery.split(" ")) {
-                            phraseQueryBuilder.add(new Term(field, valore.toLowerCase()));
-                        }
-                        phraseQueryList.add(phraseQueryBuilder.build());
-                    }
-
-                    //Term query
-                    String inputSenzaDobleDot = queryInput.replaceAll("\"([^\"]*)\"", "");
-                    String[] singleInput = inputSenzaDobleDot.split("\\s+");
-
-                    for (int i = 0; i < singleInput.length; i++) {
-                        if (!singleInput[i].equals("")) {
-                            termQueriesList.add(new TermQuery(new Term(field, singleInput[i].toLowerCase())));
-                        }
-                    }
-                    BooleanQuery.Builder query = new BooleanQuery.Builder();
-
-                    for (PhraseQuery phraseQuery : phraseQueryList) {
-                        query.add(new BooleanClause(phraseQuery, BooleanClause.Occur.MUST));
-                    }
-                    for (TermQuery termQuery : termQueriesList) {
-                        query.add(new BooleanClause(termQuery, BooleanClause.Occur.MUST));
-                    }
-                    BooleanQuery booleanQuery = query.build();
-                    utilsMethod.runQuery(searcher, booleanQuery);
-
-                }
-            } else System.out.println("L'input inserito non è valido. Riprova!");
-
-        }
-        directory.close();
-    }
-
-    @Test
-    public void testIndexingAndSearchQPHomework() throws Exception {
-        Path path = Paths.get("target/idx1");
-
-
-        QueryParser parserContenuto = new QueryParser("contenuto", new StandardAnalyzer());
-        //Se voglio che le parole devono esserci per forza devo scrivere + prima di ogni parola
-        Query query = parserContenuto.parse("+machine +learning,");
-
-
-        try (Directory directory = FSDirectory.open(path)) {
-            indexDocs(directory, null, new File("file/"));
-            try (IndexReader reader = DirectoryReader.open(directory)) {
-                IndexSearcher searcher = new IndexSearcher(reader);
-                runQuery(searcher, query);
-            } finally {
-                directory.close();
-            }
-
-        }
     }
 
 

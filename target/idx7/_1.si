@@ -1,0 +1,28 @@
+    version 9.8.0
+    min version 9.8.0
+    number of documents 4
+    uses compound file true
+    diagnostics 8
+      key java.runtime.version
+      value 17.0.6+10-LTS
+      key java.vendor
+      value Amazon.com Inc.
+      key os
+      value Mac OS X
+      key os.arch
+      value x86_64
+      key os.version
+      value 12.6.1
+      key lucene.version
+      value 9.8.0
+      key source
+      value flush
+      key timestamp
+      value 1698216735751
+    attributes 0
+    files 2
+      file _1.si
+      file _1.scf
+    id WLk9çË.QC¼îy·¦ù
+    sort 0
+checksum 00000000000382418716

@@ -1,14 +1,10 @@
     version 9.8.0
     min version 9.8.0
-    number of documents 2
+    number of documents 4
     uses compound file true
     diagnostics 8
-      key lucene.version
-      value 9.8.0
-      key source
-      value flush
       key timestamp
-      value 1698093862548
+      value 1698217348953
       key java.runtime.version
       value 17.0.6+10-LTS
       key java.vendor
@@ -19,10 +15,14 @@
       value x86_64
       key os.version
       value 12.6.1
+      key lucene.version
+      value 9.8.0
+      key source
+      value flush
     attributes 0
     files 2
-      file _0.si
-      file _0.scf
-    id ~Åﬂ·|pÇ<∂É~µæÀ
+      file _4.scf
+      file _4.si
+    id ¬c“«Ó}oÉ=Tåø’D
     sort 0
-checksum 00000000003967542594
+checksum 00000000000169094886
